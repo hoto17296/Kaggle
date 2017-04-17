@@ -49,6 +49,22 @@ method.ranger <- function(train, test) {
   return(ifelse(pred$predictions > 0.5, 1, 0))
 }
 
+## Mix
+method.mix <- function(train, test) {
+  predicts <- data.frame(test$PassengerId)
+  
+  model <- glm(Survived ~ Pclass + Sex + Age, data = train, family = binomial)
+  predicts$glm <- predict(model, test, type = 'response')
+  
+  model <- ksvm(Survived ~ Pclass + Sex + Age, data = train)
+  predicts$svm <- predict(model, test, type = 'response')[,1]
+  
+  model <- ranger(Survived ~ Pclass + Sex + Age, data = train, write.forest = TRUE)
+  predicts$ranger <- predict(model, test, type = 'response')$predictions
+  
+  return(ifelse((predicts$glm + predicts$ranger + predicts$svm) / 3 > 0.5, 1, 0))
+}
+
 # Validation
 
 ## Validation using training data
@@ -82,22 +98,24 @@ all.data <- merge(train.data, test.data, all=T)
 train.data <- preprocess.fillMissingAge(all.data, train.data)
 
 train.results <- data.frame(
-  method = c('glm', 'svm', 'ranger'),
+  method = c('glm', 'svm', 'ranger', 'mix'),
   self = c(
     test.self(method.glm, train.data),
     test.self(method.svm, train.data),
-    test.self(method.ranger, train.data)
+    test.self(method.ranger, train.data),
+    test.self(method.mix, train.data)
   ),
   cv = c(
     test.cv(method.glm, train.data),
     test.cv(method.svm, train.data),
-    test.cv(method.ranger, train.data)
+    test.cv(method.ranger, train.data),
+    test.cv(method.mix, train.data)
   )
 )
 
 # Prediction
 test.data <- preprocess.fillMissingAge(all.data, test.data)
 
-test.data$Survived <- method.ranger(train.data, test.data)
+test.data$Survived <- method.mix(train.data, test.data)
 
 write.csv(test.data[,c('PassengerId', 'Survived')], 'submission.csv', row.names = FALSE)
