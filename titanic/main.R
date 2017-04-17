@@ -13,15 +13,15 @@ preprocess.fillMissingAge <- function(train, test) {
   
   # Multiple regression analysis
   ageFilledData <- train[!is.na(train$Age),]
-  model <- lm(Age ~ Sex + Pclass + SibSp + Parch + Name.Title, data = ageFilledData)
+  model <- ranger(Age ~ Sex + Pclass + SibSp + Parch + Name.Title, data = ageFilledData, write.forest = TRUE)
   model$xlevels[['Name.Title']] <- levels(train$Name.Title)
   
   # Relative mean error
   ans <- ageFilledData$Age
-  print(mean(abs((predict(model) - ans) / ans)))
+  print(mean(abs((predict(model, ageFilledData)$predictions - ans) / ans)))
   
   # Estimate
-  test$Age[is.na(test$Age)] <- predict(model, test[is.na(test$Age),])
+  test$Age[is.na(test$Age)] <- predict(model, test[is.na(test$Age),], type = 'response')$predictions
   
   return(test)
 }
