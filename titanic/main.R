@@ -6,22 +6,24 @@ library(caret)
 # Preprocessing
 
 ## Estimate missing age data
-preprocess.fillMissingAge <- function(data) {
+preprocess.fillMissingAge <- function(train, test) {
   # Extract titles
-  data$Name.Title <- factor(gsub('^.+ (.+?)\\. .+$', '\\1', data$Name))
+  train$Name.Title <- factor(gsub('^.+ (.+?)\\. .+$', '\\1', train$Name))
+  test$Name.Title <- factor(gsub('^.+ (.+?)\\. .+$', '\\1', test$Name), levels = levels(train$Name.Title))
   
   # Multiple regression analysis
-  ageFilledData <- data[!is.na(data$Age),]
-  model <- lm(Age ~ Survived + Sex + Pclass + SibSp + Parch + Name.Title, data = ageFilledData)
+  ageFilledData <- train[!is.na(train$Age),]
+  model <- lm(Age ~ Sex + Pclass + SibSp + Parch + Name.Title, data = ageFilledData)
+  model$xlevels[['Name.Title']] <- levels(train$Name.Title)
   
   # Relative mean error
   ans <- ageFilledData$Age
   print(mean(abs((predict(model) - ans) / ans)))
   
   # Estimate
-  data$Age[is.na(data$Age)] <- predict(model, data[is.na(data$Age),])
+  test$Age[is.na(test$Age)] <- predict(model, test[is.na(test$Age),])
   
-  return(data)
+  return(test)
 }
 
 # Analysis
@@ -72,21 +74,30 @@ test.cv <- function(method, data, K=10) {
 }
 
 # Main process
+train.data <- read.csv('data/train.csv')
+test.data <- read.csv('data/test.csv')
+all.data <- merge(train.data, test.data, all=T)
 
-data <- read.csv('data/train.csv')
+## Training
+train.data <- preprocess.fillMissingAge(all.data, train.data)
 
-data <- preprocess.fillMissingAge(data)
-
-results <- data.frame(
+train.results <- data.frame(
   method = c('glm', 'svm', 'ranger'),
   self = c(
-    test.self(method.glm, data),
-    test.self(method.svm, data),
-    test.self(method.ranger, data)
+    test.self(method.glm, train.data),
+    test.self(method.svm, train.data),
+    test.self(method.ranger, train.data)
   ),
   cv = c(
-    test.cv(method.glm, data),
-    test.cv(method.svm, data),
-    test.cv(method.ranger, data)
+    test.cv(method.glm, train.data),
+    test.cv(method.svm, train.data),
+    test.cv(method.ranger, train.data)
   )
 )
+
+# Prediction
+test.data <- preprocess.fillMissingAge(all.data, test.data)
+
+test.data$Survived <- method.ranger(train.data, test.data)
+
+write.csv(test.data[,c('PassengerId', 'Survived')], 'submission.csv', row.names = FALSE)
