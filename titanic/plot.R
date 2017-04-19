@@ -1,4 +1,5 @@
 library(dplyr)
+library(GGally)
 
 train.data <- read.csv('data/train.csv')
 test.data <- read.csv('data/test.csv')
